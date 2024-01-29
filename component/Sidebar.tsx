@@ -1,22 +1,70 @@
-"use client";
-import { Avatar, Button, IconButton } from "@mui/material";
-import React from "react";
+import { FC } from "react";
+import { Avatar, Button, IconButton, Input } from "@mui/material";
 import styled from "styled-components";
 import ChatIcon from "@mui/icons-material/Chat";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import SearchIcon from "@mui/icons-material/Search";
 import * as EmailValidator from "email-validator";
-import { auth } from "@/firebase";
+import { useAuthState } from "react-firebase-hooks/auth";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  QuerySnapshot,
+  where,
+  query,
+  DocumentData,
+} from "firebase/firestore";
+import { useCollection } from "react-firebase-hooks/firestore";
+import { auth, db } from "@/firebase";
+import Chat from "./Chat";
 
-function Sidebar() {
+interface SidebarProps {
+  // Define any props specific to your Sidebar component
+}
+
+const Sidebar: FC<SidebarProps> = () => {
+  const [user] = useAuthState(auth);
+  const userChatRef = query(
+    collection(getFirestore(), "chats"),
+    where("users", "array-contains", user?.email)
+  );
+  const [chatSnapshot = {} as QuerySnapshot<DocumentData>] =
+    useCollection(userChatRef);
+
   const createChat = () => {
-    const input = prompt("please a email address you wish to chat with");
+    const input = prompt("Please enter an email address you wish to chat with");
 
-    if (!input) return null;
+    if (!input) return;
 
-    if (EmailValidator.validate(input)) {
+    if (
+      EmailValidator.validate(input) &&
+      !chatAlreadyExists(input) &&
+      user &&
+      input !== user.email
+    ) {
+      const firestore = getFirestore();
+      const chatsCollection = collection(firestore, "chats");
+
+      addDoc(chatsCollection, {
+        users: [user.email, input],
+      })
+        .then(() => {
+          console.log("Chat added successfully!");
+        })
+        .catch((error) => {
+          console.error("Error adding chat to Firestore:", error.message);
+        });
     }
   };
+
+  const chatAlreadyExists = (recipientEmail: string): boolean => {
+    return !!chatSnapshot?.docs?.find((chat) => {
+      const users = chat.data().users as string[];
+      return users.includes(recipientEmail);
+    });
+  };
+
   return (
     <div>
       <Container>
@@ -25,6 +73,7 @@ function Sidebar() {
             onClick={() => {
               auth.signOut();
             }}
+            src={user?.photoURL ?? undefined}
           />
           <IconContainer>
             <IconButton>
@@ -38,15 +87,23 @@ function Sidebar() {
 
         <Search>
           <SearchIcon />
-          <SearchInput placeholder="search in chats" />
+          <SearchInput placeholder="Search in chats" />
         </Search>
+        <SidebarButton onClick={createChat}>Start a new chat</SidebarButton>
+        {/* ... */}
+        {chatSnapshot?.docs?.map((chat) => {
+          const id = chat.id as string;
+          const users: string[] = (chat.data().users || []) as string[];
+          return <Chat key={id} id={id} users={users} />;
+        })}
       </Container>
-      <SidebarButton onClick={createChat}>start a new chat</SidebarButton>
     </div>
   );
-}
+};
 
 export default Sidebar;
+
+// Styled components and other parts of your code remain unchanged
 
 const Container = styled.div``;
 const Header = styled.div`
@@ -73,11 +130,18 @@ const Search = styled.div`
   align-items: center;
   padding: 20px;
   border-radius: 2px;
-`;
-const SearchInput = styled.input`
-  outline: none;
   border: none;
-  flex: 1;
+`;
+const SearchInput = styled(Input)`
+  && {
+    outline: none;
+    border: none;
+    flex: 1;
+    &:before,
+    &:after {
+      content: none;
+    }
+  }
 `;
 const SidebarButton = styled(Button)`
   width: 100%;

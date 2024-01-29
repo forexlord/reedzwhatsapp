@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "@/firebase";
 import Loading from "@/component/Loading";
-import Login from "./Login/page";
+import Login from "./login/page";
 import Sidebar from "@/component/Sidebar";
 
 import {
@@ -35,7 +35,7 @@ export default function Home() {
             { merge: true }
           );
         } catch (error) {
-          console.error("Error updating user in Firestore:", error.message);
+          alert(error);
         }
       }
     };
